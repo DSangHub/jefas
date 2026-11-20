@@ -41,5 +41,17 @@ If your actual APIs use different routes or authentication, edit `callConnector(
 - Use a regulated provider for bank connections; do not collect bank passwords.
 - Confirm every financial/external action before execution.
 
-## Vercel note
-This persistent Node server and local JSON database are best deployed first on Render, Railway, Fly.io, or a VPS. For Vercel, convert API routes to serverless functions and use an external database.
+## Vercel deployment
+`server.js` is the Node server entrypoint. Browser assets live in `public/` so
+Vercel does not mistake the browser's `app.js` for a server entrypoint.
+
+The landing page can be deployed now. Account/API routes return a deliberate
+`503` with a setup message on Vercel: the local JSON store and in-memory sessions
+are not durable across function instances. Do not move the database to `/tmp`;
+it would still lose data.
+
+Before enabling accounts on Vercel, implement a persistent external database and
+shared sessions, set a strong `APP_SECRET` through the project's environment
+variables, and replace the Vercel setup guard once those are integrated. Add
+provider/connector credentials only through secure environment configuration.
+Standalone local development still uses `data/db.json` and in-memory sessions.

@@ -11,8 +11,12 @@ const APP_SECRET = process.env.APP_SECRET || 'development-only-change-me-please-
 const DB_FILE = path.join(__dirname, 'data', 'db.json');
 const sessions = new Map();
 const defaults = { users: [], profiles: [], keys: [], approvals: [], conversations: [] };
-await mkdir(path.dirname(DB_FILE), { recursive: true });
-if (!existsSync(DB_FILE)) await writeFile(DB_FILE, JSON.stringify(defaults, null, 2));
+// Local JSON storage is only suitable for the standalone development server.
+// Vercel instances cannot persist or share this file.
+if (!process.env.VERCEL) {
+ await mkdir(path.dirname(DB_FILE), { recursive: true });
+ if (!existsSync(DB_FILE)) await writeFile(DB_FILE, JSON.stringify(defaults, null, 2));
+}
 
 const readDB = async () => ({ ...defaults, ...JSON.parse(await readFile(DB_FILE, 'utf8')) });
 const saveDB = async db => writeFile(DB_FILE, JSON.stringify(db, null, 2));
@@ -60,6 +64,7 @@ async function callConnector(name, db, userId, payload){
 
 const server=http.createServer(async(req,res)=>{ try{
  const u=new URL(req.url,`http://${req.headers.host}`); const route=u.pathname;
+ if(process.env.VERCEL&&route.startsWith('/api/'))return json(res,503,{error:'Las cuentas aún no están disponibles. Falta configurar una base de datos persistente y el secreto del servidor.'});
  if(req.method==='POST'&&route==='/api/auth/register'){
   const b=await body(req), db=await readDB(); if(!b.email||!b.password||b.password.length<8)return json(res,400,{error:'Correo y contraseña de 8+ caracteres requeridos'});
   if(db.users.some(x=>x.email===b.email.toLowerCase()))return json(res,409,{error:'Ese correo ya existe'});
