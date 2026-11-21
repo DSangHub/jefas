@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {fixture,request,register} from './http-helpers.js';
+import {reserveGeneration} from '../lib/generations.js';
+test('persistent quotas, production cookies, validation and logout revocation',async()=>{const f=await fixture();try{
+ const cookie=await register(f.base);const userId=(await (await request(f.base,'/api/me',{cookie})).json()).profile.userId;
+ for(let i=0;i<20;i++)await reserveGeneration(f.db,{id:randomUUID(),userId,kind:'chat',model:'test',input:{}});
+ await assert.rejects(reserveGeneration(f.db,{id:randomUUID(),userId,kind:'photo',model:'test',era:'test',input:{}}),e=>e.status===429);
+ assert.equal((await request(f.base,'/api/profile',{cookie,method:'PUT',data:{name:'Bad',provider:'invalid',language:'es-MX',voice:true}})).status,400);
+ assert.equal((await request(f.base,'/api/schools/not-a-uuid',{cookie,method:'DELETE'})).status,400);
+ process.env.VERCEL='1';
+ assert.equal((await request(f.base,'/api/auth/logout',{cookie,method:'POST'})).status,403);
+ const origin=f.base.replace('http:','https:');
+ const login=await request(f.base,'/api/auth/login',{method:'POST',origin,data:{email:'one@example.test',password:'example-password-123'}});assert.equal(login.status,200);assert.match(login.headers.get('set-cookie'),/; Secure/);assert.match(login.headers.get('set-cookie'),/HttpOnly/);
+ const newCookie=login.headers.get('set-cookie').split(';')[0];assert.equal((await request(f.base,'/api/auth/logout',{cookie:newCookie,method:'POST',origin})).status,200);assert.equal((await request(f.base,'/api/me',{cookie:newCookie})).status,401);
+ delete process.env.VERCEL;
+ for(let i=0;i<10;i++)assert.equal((await request(f.base,'/api/auth/login',{method:'POST',data:{email:'missing@example.test',password:'wrong-password'}})).status,401);
+ assert.equal((await request(f.base,'/api/auth/login',{method:'POST',data:{email:'missing@example.test',password:'wrong-password'}})).status,429);
+ }finally{delete process.env.VERCEL;await f.close();}});
