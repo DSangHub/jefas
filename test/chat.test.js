@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {fixture,request,register} from './http-helpers.js';
+test('chats and messages require membership; assistant history survives requests',async()=>{process.env.OPENAI_API_KEY='test-only-not-a-real-key';const f=await fixture({fetcher:async()=>Response.json({choices:[{message:{content:'Hola'}}]})});try{const a=await register(f.base),b=await register(f.base,'two@example.test'),c=await register(f.base,'three@example.test');const user=(await (await request(f.base,'/api/me',{cookie:b})).json()).profile.userId;
+ assert.equal((await request(f.base,'/api/chats',{cookie:a,method:'POST',data:{friendId:user}})).status,403);
+ const rel=(await (await request(f.base,'/api/friends',{cookie:a,method:'POST',data:{userId:user}})).json()).friendship;await request(f.base,'/api/friends/'+rel.id,{cookie:b,method:'PUT',data:{status:'accepted'}});
+ const chat=(await (await request(f.base,'/api/chats',{cookie:a,method:'POST',data:{friendId:user}})).json()).chat;
+ assert.equal((await request(f.base,`/api/chats/${chat.id}/messages`,{cookie:b,method:'POST',data:{content:'hola',role:'assistant',userId:'ignored'}})).status,201);
+ assert.equal((await request(f.base,`/api/chats/${chat.id}/messages`,{cookie:c})).status,404);
+ const messages=(await (await request(f.base,`/api/chats/${chat.id}/messages`,{cookie:a})).json()).messages;assert.equal(messages[0].user_id,user);assert.equal(messages[0].role,'user');
+ const r=await request(f.base,'/api/chat',{cookie:a,method:'POST',data:{message:'Hola'}});assert.equal(r.status,200);const ai=await r.json();assert.equal((await (await request(f.base,`/api/chats/${ai.chatId}/messages`,{cookie:a})).json()).messages.length,2);
+ assert.equal((await request(f.base,'/api/chat',{cookie:b,method:'POST',data:{message:'Hola',chatId:ai.chatId}})).status,404);
+ assert.equal((await f.db.query("SELECT status FROM ai_generations")).rows[0].status,'completed');
+ }finally{delete process.env.OPENAI_API_KEY;await f.close();}});

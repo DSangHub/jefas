@@ -1,0 +1,4 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {fixture,request,register} from './http-helpers.js';
+test('profiles are persistent, scoped and never reveal credentials',async()=>{const f=await fixture();try{const one=await register(f.base),two=await register(f.base,'two@example.test');const data={name:'Changed',language:'es-MX',voice:false,provider:'gemini',userId:'ignored'};assert.equal((await request(f.base,'/api/profile',{cookie:one,method:'PUT',data})).status,200);assert.equal((await (await request(f.base,'/api/me',{cookie:one})).json()).profile.name,'Changed');assert.equal((await (await request(f.base,'/api/me',{cookie:two})).json()).profile.name,'Test');assert.equal((await request(f.base,'/api/keys',{cookie:one,method:'POST',data:{key:'should-not-store'}})).status,405);assert.equal((await request(f.base,'/api/profile',{method:'PUT',data})).status,401);}finally{await f.close();}});
