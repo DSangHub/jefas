@@ -90,6 +90,7 @@ All JSON responses use `Cache-Control: no-store`. On errors, clients receive
   minutes are marked interrupted when polled. There is no fabricated success or
   automatic billable retry. Original uploads are not retained; their hashes are.
   Generated PNGs are stored privately in Postgres JSONB for this initial rollout.
+  Results above 4 MB of base64 are rejected to stay within hosted response limits.
   At larger volume, move image payloads to private object storage with lifecycle
   retention rather than growing database storage indefinitely.
 
@@ -108,6 +109,12 @@ The preview has a separate empty database. The signed-out landing page and inval
 registration validation can be browser-checked without an account. There are no
 seeded credentials, preview auth bypass, or documented test account; authenticated
 browser checks need a tester to create an account using their own password.
+Preview builds also run an HTTP smoke check against the actual hosted preview
+database: registration, sessions across server instances, profiles, ownership,
+friendship, messages and logout. Random test credentials stay in process memory;
+synthetic test users and their related records are deleted afterward. This check
+never runs in production and never calls AI providers.
+
 Live AI verification additionally requires the operator's configured provider key
 and the actual four era IDs. No live paid generation is part of the test suite.
 
